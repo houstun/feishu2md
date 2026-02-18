@@ -16,6 +16,8 @@ function detectContentType(buffer: Buffer): string {
   return "application/octet-stream";
 }
 
+export const maxDuration = 60;
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ token: string }> }

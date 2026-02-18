@@ -3,6 +3,8 @@ import { validateDocumentURL } from "@/lib/url-utils";
 import { getDocxContent, getWikiNodeInfo } from "@/lib/feishu-client";
 import { Parser } from "@/lib/parser";
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const { url } = await request.json();

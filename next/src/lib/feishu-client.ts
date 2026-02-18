@@ -14,6 +14,7 @@ function getClient(): lark.Client {
       appId,
       appSecret,
       appType: lark.AppType.SelfBuild,
+      domain: lark.Domain.Feishu,
     });
   }
   return client;
