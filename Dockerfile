@@ -15,8 +15,11 @@ FROM alpine:latest
 RUN apk update && apk add --no-cache ca-certificates
 
 ENV GIN_MODE=release
+ENV DATA_DIR=/data
 
 COPY --from=builder /feishu2md/feishu2md4web ./
+
+VOLUME /data
 
 EXPOSE 8080
 

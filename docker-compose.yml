@@ -1,0 +1,14 @@
+services:
+  feishu2md:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - FEISHU_APP_ID=${FEISHU_APP_ID}
+      - FEISHU_APP_SECRET=${FEISHU_APP_SECRET}
+    volumes:
+      - feishu2md-data:/data
+    restart: unless-stopped
+
+volumes:
+  feishu2md-data:

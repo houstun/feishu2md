@@ -19,7 +19,7 @@ feishu2md4web
 .env
 ./static
 VERSION
-app
+/app
 
 .idea
 node_modules

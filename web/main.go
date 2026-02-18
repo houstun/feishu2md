@@ -19,7 +19,11 @@ func main() {
 		utils.LoadEnv()
 	}
 
+	initStore()
+
 	router := gin.New()
+	router.Use(gin.Logger(), gin.Recovery())
+
 	templ := template.Must(template.New("").ParseFS(f, "templ/*.templ.html"))
 	router.SetHTMLTemplate(templ)
 
@@ -27,6 +31,10 @@ func main() {
 		c.HTML(http.StatusOK, "index.templ.html", nil)
 	})
 	router.GET("/download", downloadHandler)
+	router.GET("/convert", convertHandler)
+	router.GET("/image/:token", imageProxyHandler)
+	router.POST("/save", saveHandler)
+	router.GET("/view/:id", viewHandler)
 
 	if err := router.Run(); err != nil {
 		log.Panicf("error: %s", err)

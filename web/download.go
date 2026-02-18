@@ -17,6 +17,110 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ConvertResponse is the JSON response for the /convert endpoint
+type ConvertResponse struct {
+	Title    string `json:"title"`
+	Markdown string `json:"markdown"`
+}
+
+func newClientAndConfig() (*core.Client, *core.Config) {
+	config := core.NewConfig(
+		os.Getenv("FEISHU_APP_ID"),
+		os.Getenv("FEISHU_APP_SECRET"),
+	)
+	client := core.NewClient(
+		config.Feishu.AppId, config.Feishu.AppSecret,
+	)
+	return client, config
+}
+
+func resolveDocTypeAndToken(ctx context.Context, client *core.Client, docType, docToken string) (string, string, error) {
+	if docType == "wiki" {
+		node, err := client.GetWikiNodeInfo(ctx, docToken)
+		if err != nil {
+			return "", "", fmt.Errorf("client.GetWikiNodeInfo: %w", err)
+		}
+		docType = node.ObjType
+		docToken = node.ObjToken
+	}
+	if docType == "docs" {
+		return "", "", fmt.Errorf("unsupported docs document type")
+	}
+	return docType, docToken, nil
+}
+
+func convertHandler(c *gin.Context) {
+	feishuDocxURL, err := url.QueryUnescape(c.Query("url"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid encoded feishu/larksuite URL"})
+		return
+	}
+
+	docType, docToken, err := utils.ValidateDocumentURL(feishuDocxURL)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid feishu/larksuite document URL"})
+		return
+	}
+
+	ctx := context.Background()
+	client, config := newClientAndConfig()
+
+	docType, docToken, err = resolveDocTypeAndToken(ctx, client, docType, docToken)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	docx, blocks, err := client.GetDocxContent(ctx, docToken)
+	if err != nil {
+		log.Printf("error: GetDocxContent: %s", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get document content"})
+		return
+	}
+
+	parser := core.NewParser(config.Output)
+	markdown := parser.ParseDocxContent(docx, blocks)
+
+	// Replace image tokens with proxy URLs
+	for _, imgToken := range parser.ImgTokens {
+		proxyURL := fmt.Sprintf("/image/%s", imgToken)
+		markdown = strings.Replace(markdown, imgToken, proxyURL, 1)
+	}
+
+	engine := lute.New(func(l *lute.Lute) {
+		l.RenderOptions.AutoSpace = true
+	})
+	result := engine.FormatStr("md", markdown)
+
+	c.JSON(http.StatusOK, ConvertResponse{
+		Title:    docx.Title,
+		Markdown: result,
+	})
+}
+
+func imageProxyHandler(c *gin.Context) {
+	imgToken := c.Param("token")
+	if imgToken == "" {
+		c.String(http.StatusBadRequest, "Missing image token")
+		return
+	}
+
+	ctx := context.Background()
+	client, config := newClientAndConfig()
+
+	_, rawImage, err := client.DownloadImageRaw(ctx, imgToken, config.Output.ImageDir)
+	if err != nil {
+		log.Printf("error: DownloadImageRaw: %s", err)
+		c.String(http.StatusInternalServerError, "Failed to download image")
+		return
+	}
+
+	// Detect content type from image bytes
+	contentType := http.DetectContentType(rawImage)
+	c.Header("Cache-Control", "public, max-age=86400")
+	c.Data(http.StatusOK, contentType, rawImage)
+}
+
 func downloadHandler(c *gin.Context) {
 	// get parameters
 	feishu_docx_url, err := url.QueryUnescape(c.Query("url"))
