@@ -14,6 +14,8 @@ export function Converter() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"preview" | "raw">("preview");
   const [toast, setToast] = useState("");
+  const [sharing, setSharing] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -31,6 +33,7 @@ export function Converter() {
     setError("");
     setTitle("");
     setMarkdown("");
+    setShareUrl("");
 
     try {
       const resp = await fetch("/api/convert", {
@@ -81,6 +84,32 @@ export function Converter() {
     a.click();
     URL.revokeObjectURL(blobUrl);
   }, [markdown, title]);
+
+  const share = useCallback(async () => {
+    setSharing(true);
+    try {
+      const resp = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, markdown }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        showToast(data.error || "分享失败");
+        return;
+      }
+      const fullUrl = `${window.location.origin}${data.url}`;
+      setShareUrl(fullUrl);
+      navigator.clipboard.writeText(fullUrl).then(
+        () => showToast("分享链接已复制到剪贴板"),
+        () => showToast("分享成功，请手动复制链接")
+      );
+    } catch {
+      showToast("分享失败，请重试");
+    } finally {
+      setSharing(false);
+    }
+  }, [title, markdown, showToast]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -154,8 +183,40 @@ export function Converter() {
               >
                 下载
               </button>
+              <button
+                onClick={share}
+                disabled={sharing}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                title="生成分享链接"
+              >
+                {sharing ? "分享中..." : "分享"}
+              </button>
             </div>
           </div>
+
+          {/* Share URL */}
+          {shareUrl && (
+            <div className="flex items-center gap-2 mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <span className="text-sm text-green-700 shrink-0">分享链接：</span>
+              <input
+                type="text"
+                readOnly
+                value={shareUrl}
+                className="flex-1 text-sm bg-transparent border-none outline-none text-green-800"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <span className="text-xs text-green-600 shrink-0">
+                <a
+                  href={`${shareUrl}/raw`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-green-800"
+                >
+                  Raw
+                </a>
+              </span>
+            </div>
+          )}
 
           {/* Tabs */}
           <div className="flex border-b border-gray-200 mb-0">

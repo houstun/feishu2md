@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.59.0",
+    "@upstash/redis": "^1.36.2",
     "highlight.js": "^11.11.1",
     "next": "^16.1.6",
     "react": "^19.2.4",
