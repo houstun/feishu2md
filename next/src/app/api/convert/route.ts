@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateDocumentURL } from "@/lib/url-utils";
-import { getDocxContent, getWikiNodeInfo } from "@/lib/feishu-client";
+import { getDocxContent, getWikiNodeInfo, downloadImage } from "@/lib/feishu-client";
 import { Parser } from "@/lib/parser";
+import { isOSSConfigured, uploadImage } from "@/lib/oss";
 
 export const maxDuration = 60;
 
@@ -36,9 +37,27 @@ export async function POST(request: NextRequest) {
     const parser = new Parser();
     let markdown = parser.parseDocxContent(document, blocks);
 
-    // Replace image tokens with proxy URLs
-    for (const imgToken of parser.imageTokens) {
-      markdown = markdown.replace(imgToken, `/api/image/${imgToken}`);
+    // Replace image tokens with URLs
+    if (isOSSConfigured() && parser.imageTokens.length > 0) {
+      const results = await Promise.all(
+        parser.imageTokens.map(async (imgToken) => {
+          try {
+            const buffer = await downloadImage(imgToken);
+            const ossUrl = await uploadImage(imgToken, buffer);
+            return { imgToken, url: ossUrl };
+          } catch (err) {
+            console.error(`Failed to upload image ${imgToken} to OSS:`, err);
+            return { imgToken, url: `/api/image/${imgToken}` };
+          }
+        })
+      );
+      for (const { imgToken, url: imageUrl } of results) {
+        markdown = markdown.replace(imgToken, imageUrl);
+      }
+    } else {
+      for (const imgToken of parser.imageTokens) {
+        markdown = markdown.replace(imgToken, `/api/image/${imgToken}`);
+      }
     }
 
     return NextResponse.json({
