@@ -38,12 +38,6 @@ export async function POST(request: NextRequest) {
     let markdown = parser.parseDocxContent(document, blocks);
 
     // Replace image tokens with URLs
-    console.log("[OSS Debug] isOSSConfigured:", isOSSConfigured());
-    console.log("[OSS Debug] ALI_OSS_REGION:", process.env.ALI_OSS_REGION ?? "(not set)");
-    console.log("[OSS Debug] ALI_OSS_BUCKET:", process.env.ALI_OSS_BUCKET ?? "(not set)");
-    console.log("[OSS Debug] ALI_OSS_ACCESS_KEY_ID:", process.env.ALI_OSS_ACCESS_KEY_ID ? "set" : "(not set)");
-    console.log("[OSS Debug] ALI_OSS_ACCESS_KEY_SECRET:", process.env.ALI_OSS_ACCESS_KEY_SECRET ? "set" : "(not set)");
-    console.log("[OSS Debug] imageTokens count:", parser.imageTokens.length);
     if (isOSSConfigured() && parser.imageTokens.length > 0) {
       const results = await Promise.all(
         parser.imageTokens.map(async (imgToken) => {

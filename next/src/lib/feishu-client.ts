@@ -102,15 +102,36 @@ export async function downloadImage(imgToken: string): Promise<Buffer> {
     path: { file_token: imgToken },
   });
 
-  if (resp instanceof Buffer) {
+  if (Buffer.isBuffer(resp)) {
     return resp;
   }
 
-  // The SDK may return a ReadableStream
-  const chunks: Uint8Array[] = [];
-  const reader = resp as unknown as AsyncIterable<Uint8Array>;
-  for await (const chunk of reader) {
-    chunks.push(chunk);
+  if (resp instanceof Uint8Array || resp instanceof ArrayBuffer) {
+    return Buffer.from(resp);
   }
-  return Buffer.concat(chunks);
+
+  // The SDK may return a Node.js Readable stream
+  const { Readable } = await import("stream");
+  if (resp instanceof Readable) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of resp) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+
+  // Fallback: try to consume as ReadableStream (Web API)
+  const stream = resp as unknown as ReadableStream<Uint8Array>;
+  if (typeof stream.getReader === "function") {
+    const reader = stream.getReader();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) chunks.push(value);
+    }
+    return Buffer.concat(chunks);
+  }
+
+  throw new Error(`Unexpected response type from media.download: ${typeof resp}`);
 }
