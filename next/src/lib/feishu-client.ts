@@ -106,29 +106,31 @@ export async function downloadImage(imgToken: string): Promise<Buffer> {
     return resp;
   }
 
-  if (resp instanceof Uint8Array || resp instanceof ArrayBuffer) {
-    return Buffer.from(resp);
+  if (resp instanceof Uint8Array) {
+    return Buffer.from(resp.buffer, resp.byteOffset, resp.byteLength);
   }
 
-  // The SDK may return a Node.js Readable stream
+  if (resp instanceof ArrayBuffer) {
+    return Buffer.from(new Uint8Array(resp));
+  }
+
+  // The SDK returns an object with { writeFile, getReadableStream, headers }
+  const sdkResp = resp as unknown as { getReadableStream?: () => NodeJS.ReadableStream };
+  if (typeof sdkResp.getReadableStream === "function") {
+    const stream = sdkResp.getReadableStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as unknown as Uint8Array));
+    }
+    return Buffer.concat(chunks);
+  }
+
+  // Fallback: Node.js Readable stream
   const { Readable } = await import("stream");
   if (resp instanceof Readable) {
     const chunks: Buffer[] = [];
     for await (const chunk of resp) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    return Buffer.concat(chunks);
-  }
-
-  // Fallback: try to consume as ReadableStream (Web API)
-  const stream = resp as unknown as ReadableStream<Uint8Array>;
-  if (typeof stream.getReader === "function") {
-    const reader = stream.getReader();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) chunks.push(value);
     }
     return Buffer.concat(chunks);
   }
